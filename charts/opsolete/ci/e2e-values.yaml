@@ -1,0 +1,12 @@
+# Used by `ct install` in CI only: a throwaway Postgres in the kind cluster, no OIDC, file state store.
+config:
+  PUBLIC_URL: http://opsolete.localhost:8080
+  STATE_STORE: file:///tmp/state?create_dir=1&metadata=skip
+  AUTH_DEV_USER: ci@localhost
+  ADMIN_EMAILS: ci@localhost
+secrets:
+  DATABASE_URL: postgres://opsolete:opsolete@postgres.default.svc:5432/opsolete?sslmode=disable
+  SECRET_KEY: ci-only-secret-key-not-for-production
+  RUNNER_TOKEN: ci-only-runner-token-not-for-production
+runner:
+  terminationGracePeriodSeconds: 10

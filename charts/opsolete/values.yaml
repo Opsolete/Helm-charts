@@ -1,0 +1,75 @@
+nameOverride: ""
+fullnameOverride: ""
+
+# Plain (non-secret) env vars for the app; see docs/content/docs/operations/configuration.md.
+config:
+  PUBLIC_URL: https://opsolete.example.com
+  STATE_STORE: ""            # e.g. azblob://tfstate, s3://tfstate?region=eu-west-1, gs://tfstate
+  OIDC_ISSUER: ""
+  OIDC_CLIENT_ID: ""
+  ADMIN_EMAILS: ""
+  # AZURE_STORAGE_ACCOUNT: mystorageaccount   # needed with azblob://
+
+# Secret env vars. Prefer existingSecret (sops / External Secrets) with the keys
+# DATABASE_URL, SECRET_KEY, RUNNER_TOKEN and optionally OIDC_CLIENT_SECRET.
+# SECRET_KEY must stay stable and be backed up elsewhere: without it, encrypted state is lost.
+secrets:
+  existingSecret: ""
+  DATABASE_URL: ""
+  SECRET_KEY: ""             # openssl rand -base64 32
+  RUNNER_TOKEN: ""           # openssl rand -hex 32
+  OIDC_CLIENT_SECRET: ""
+
+# Workload identity for the app, so it reaches STATE_STORE without static keys.
+# Runners never get it: their cloud credentials come from workspace variables.
+workloadIdentity:
+  provider: ""               # azure | aws | gcp; empty = off (EKS Pod Identity needs nothing here)
+  identity: ""               # azure: managed identity client id, aws: IAM role ARN, gcp: GSA email
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+imagePullSecrets: []
+
+app:
+  replicas: 1
+  image:
+    repository: ghcr.io/opsolete/opsolete-app
+    tag: ""                  # defaults to the chart appVersion
+    pullPolicy: IfNotPresent
+  resources: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+runner:
+  enabled: true
+  replicas: 1
+  image:
+    repository: ghcr.io/opsolete/opsolete-runner
+    tag: ""
+    pullPolicy: IfNotPresent
+  # Extra OPS_* env, e.g. OPS_JOB_TIMEOUT: 45m. OPS_SERVER_URL defaults to the in-cluster Service.
+  env: {}
+  # First SIGTERM drains the current job; keep this >= OPS_JOB_TIMEOUT (default 1h).
+  terminationGracePeriodSeconds: 3600
+  resources: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  tlsSecretName: ""          # host is taken from config.PUBLIC_URL

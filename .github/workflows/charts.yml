@@ -1,0 +1,94 @@
+name: charts
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Lint (helm lint, yamllint, schema, version bump on PRs) and install on kind.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # ct diffs against the target branch
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.x"
+      - uses: helm/chart-testing-action@720270857a28afd41e2426521a7801db09e9b510 # v2.9.0
+
+      # PRs test the changed charts (and must bump their version); main tests all of them.
+      - id: scope
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            echo "args=--config ct.yaml" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=--config ct.yaml --all --check-version-increment=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - run: ct lint ${{ steps.scope.outputs.args }}
+
+      - name: kubeconform (all ci/*-values.yaml)
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
+          for chart in charts/*/; do
+            for v in "$chart"ci/*-values.yaml; do
+              helm template ci "$chart" -f "$v" | ./kubeconform -strict -summary -
+            done
+          done
+
+      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+
+      - name: Postgres for the install test
+        run: |
+          kubectl create deployment postgres --image=postgres:17
+          kubectl set env deployment/postgres POSTGRES_USER=opsolete POSTGRES_PASSWORD=opsolete POSTGRES_DB=opsolete
+          kubectl expose deployment postgres --port=5432
+          kubectl rollout status deployment/postgres --timeout=180s
+
+      # Installs with every ci/*-values.yaml and waits until app and runner pods are ready.
+      - run: ct install ${{ steps.scope.outputs.args }}
+
+  # Package changed chart versions as GitHub releases and update the index on gh-pages.
+  release:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write # OCI push to ghcr.io
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - uses: helm/chart-releaser-action@92c6b97fa9f664492a2592e0d1d80bc6bf378957 # v1.9.0
+        with:
+          skip_existing: true
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same packages as OCI artifacts: helm install opsolete oci://ghcr.io/opsolete/charts/opsolete
+      - name: Push to ghcr.io
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          pkgs=(.cr-release-packages/*.tgz) # only charts whose version changed
+          [ ${#pkgs[@]} -eq 0 ] && { echo "nothing to push"; exit 0; }
+          echo "$TOKEN" | helm registry login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for p in "${pkgs[@]}"; do helm push "$p" "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"; done
