@@ -34,10 +34,12 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             echo "args=--config ct.yaml" >> "$GITHUB_OUTPUT"
           else
-            echo "args=--config ct.yaml --all --check-version-increment=false" >> "$GITHUB_OUTPUT"
+            echo "args=--config ct.yaml --all" >> "$GITHUB_OUTPUT"
+            # lint-only flag; `ct install` rejects it
+            echo "lint_args=--check-version-increment=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - run: ct lint ${{ steps.scope.outputs.args }}
+      - run: ct lint ${{ steps.scope.outputs.args }} ${{ steps.scope.outputs.lint_args }}
 
       - name: kubeconform (all ci/*-values.yaml)
         run: |
