@@ -2,11 +2,22 @@ nameOverride: ""
 fullnameOverride: ""
 
 # Plain (non-secret) env vars for the app; see docs/content/docs/operations/configuration.md.
+# The chart refuses to render without STATE_STORE and a login method (app >= 0.3.0
+# exits on startup without them).
 config:
   PUBLIC_URL: https://opsolete.example.com
-  STATE_STORE: ""            # e.g. azblob://tfstate, s3://tfstate?region=eu-west-1, gs://tfstate
+  # Required. e.g. azblob://tfstate, s3://tfstate?region=eu-west-1, gs://tfstate.
+  # Testing only: file:///tmp/state?create_dir=1&metadata=skip (/tmp is an emptyDir,
+  # so state is lost on every pod restart; create_dir=1 creates the subfolder).
+  STATE_STORE: ""
+  # Login (required): OIDC_ISSUER + OIDC_CLIENT_ID (+ secrets.OIDC_CLIENT_SECRET),
+  # or AUTH_DEV_USER below.
   OIDC_ISSUER: ""
   OIDC_CLIENT_ID: ""
+  # Testing only: skips login, every visitor is logged in as this user.
+  # AUTH_DEV_USER: dev@example.com
+  # Comma-separated; users get admin rights only if their login email is listed
+  # here (include AUTH_DEV_USER when using it).
   ADMIN_EMAILS: ""
   # AZURE_STORAGE_ACCOUNT: mystorageaccount   # needed with azblob://
 

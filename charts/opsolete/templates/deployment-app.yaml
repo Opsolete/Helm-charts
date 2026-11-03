@@ -2,6 +2,14 @@
 {{- if and $wi.provider (not (has $wi.provider (list "azure" "aws" "gcp"))) }}
 {{- fail "workloadIdentity.provider must be azure, aws or gcp" }}
 {{- end }}
+{{- /* The app exits on startup without these; fail at render time instead of CrashLoopBackOff. */}}
+{{- $c := .Values.config }}
+{{- if not $c.STATE_STORE }}
+{{- fail "config.STATE_STORE is required (e.g. azblob://tfstate, or file:///tmp/state?create_dir=1 for testing)" }}
+{{- end }}
+{{- if not (or (and $c.OIDC_ISSUER $c.OIDC_CLIENT_ID) $c.AUTH_DEV_USER) }}
+{{- fail "login required: set config.OIDC_ISSUER + config.OIDC_CLIENT_ID (and OIDC_CLIENT_SECRET), or config.AUTH_DEV_USER for testing" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
