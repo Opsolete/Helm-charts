@@ -77,6 +77,16 @@ jobs:
       - run: |
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      # chart-releaser needs an existing gh-pages branch for index.yaml; bootstrap it on first run.
+      - name: Ensure gh-pages branch exists
+        run: |
+          if ! git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git worktree add --orphan -b gh-pages /tmp/gh-pages
+            git -C /tmp/gh-pages commit --allow-empty -m "Initialize gh-pages"
+            git -C /tmp/gh-pages push origin gh-pages
+            git worktree remove /tmp/gh-pages
+          fi
+          git fetch origin gh-pages:refs/remotes/origin/gh-pages
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - uses: helm/chart-releaser-action@92c6b97fa9f664492a2592e0d1d80bc6bf378957 # v1.9.0
         with:
