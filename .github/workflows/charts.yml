@@ -69,7 +69,7 @@ jobs:
           render --set config.STATE_STORE=gs://tfstate \
             --set config.OIDC_ISSUER=https://idp.example.com --set config.OIDC_CLIENT_ID=opsolete >/dev/null
 
-      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+      - uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
 
       - name: Postgres for the install test
         run: |
