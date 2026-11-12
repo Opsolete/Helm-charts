@@ -45,8 +45,11 @@ spec:
           securityContext:
             {{- include "opsolete.containerSecurityContext" . | nindent 12 }}
             {{- if .Values.runner.sandbox }}
-            # the job sandbox creates user namespaces, which the RuntimeDefault profile forbids
+            # the job sandbox creates user namespaces (the RuntimeDefault seccomp profile forbids them) and mounts
+            # its private /tmp in them (the default AppArmor profile denies mount)
             seccompProfile:
+              type: Unconfined
+            appArmorProfile:
               type: Unconfined
             {{- end }}
           env:

@@ -73,10 +73,11 @@ runner:
     pullPolicy: IfNotPresent
   # Extra OPS_* env, e.g. OPS_JOB_TIMEOUT: 45m. OPS_SERVER_URL defaults to the in-cluster Service.
   env: {}
-  # The job sandbox (app >= 0.9.0): each Terraform command in its own Linux namespaces, with a private /tmp
+  # The job sandbox: each Terraform command in its own Linux namespaces, with a private /tmp
   # (https://opsolete.github.io/Opsolete/docs/config/runners/#the-job-sandbox). Sets the runner container's
-  # seccomp profile to Unconfined and OPS_SANDBOX=namespaces: the runner then doesn't start where the nodes
-  # forbid unprivileged user namespaces (e.g. Ubuntu >= 23.10's AppArmor default). Off: the runner warns.
+  # seccomp and AppArmor profiles to Unconfined (Kubernetes >= 1.30) and OPS_SANDBOX=namespaces: the runner then
+  # doesn't start where the nodes forbid unprivileged user namespaces (e.g. Ubuntu >= 23.10's default
+  # kernel.apparmor_restrict_unprivileged_userns=1). Off: the runner probes it anyway and warns if it can't.
   sandbox: false
   # IPv4 CIDRs the runners may not reach (a NetworkPolicy; needs a CNI that enforces it): the cloud metadata
   # endpoint, so module code can't take the node's identity. [] adds no policy.
