@@ -47,7 +47,7 @@ serviceAccount:
 imagePullSecrets: []
 
 app:
-  replicas: 1 # mode deployment
+  replicas: 1  # mode deployment
   image:
     repository: ghcr.io/opsolete/opsolete-app
     tag: ""                  # defaults to the chart appVersion
@@ -78,8 +78,8 @@ runner:
   # leaves outlives it (https://opsolete.github.io/Opsolete/docs/config/runners/#a-pod-per-run-phase).
   mode: deployment
   scaledJob:
-    maxReplicas: 5 # jobs at once
-    pollingInterval: 10 # seconds between KEDA's looks at the queue
+    maxReplicas: 5  # jobs at once
+    pollingInterval: 10  # seconds between KEDA's looks at the queue
     # a pod's limit: OPS_JOB_TIMEOUT + OPS_JOB_GRACE + reporting (defaults 1h + 10m + 5m), plus its start
     activeDeadlineSeconds: 4800
   # e.g. gvisor or kata (a RuntimeClass on the cluster): module code doesn't run on the node's kernel
