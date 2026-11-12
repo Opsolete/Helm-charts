@@ -69,6 +69,20 @@ jobs:
           render --set config.STATE_STORE=gs://tfstate \
             --set config.OIDC_ISSUER=https://idp.example.com --set config.OIDC_CLIENT_ID=opsolete >/dev/null
 
+      # runner.mode scaledJob: KEDA's resources, checked against its CRD schemas (the install test runs the
+      # Deployment mode only: kind has no KEDA)
+      - name: opsolete scaledJob mode
+        run: |
+          helm template ci charts/opsolete -f charts/opsolete/ci/e2e-values.yaml --set runner.mode=scaledJob \
+            --set runner.runtimeClassName=gvisor --set runner.pluginCache.existingClaim=tfcache |
+            ./kubeconform -strict -summary -schema-location default \
+              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+          if helm template ci charts/opsolete -f charts/opsolete/ci/e2e-values.yaml --set runner.mode=pods 2>&1 | grep -q "runner.mode must be"; then
+            echo "ok: bad runner.mode rejected"
+          else
+            echo "::error::runner.mode=pods rendered"; exit 1
+          fi
+
       - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
 
       - name: Postgres for the install test

@@ -1,4 +1,4 @@
-{{- if .Values.runner.enabled }}
+{{- if and .Values.runner.enabled (eq .Values.runner.mode "deployment") }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,88 +12,5 @@ spec:
     matchLabels:
       {{- include "opsolete.selectorLabels" (list . "runner") | nindent 6 }}
   template:
-    metadata:
-      labels:
-        {{- include "opsolete.selectorLabels" (list . "runner") | nindent 8 }}
-        {{- with .Values.runner.podLabels }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-      annotations:
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
-        {{- with .Values.runner.podAnnotations }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-    spec:
-      # Runners hold no identity: cloud credentials come per job from workspace variables.
-      serviceAccountName: default
-      automountServiceAccountToken: false
-      # Service env vars would leak into every Terraform job.
-      enableServiceLinks: false
-      # The runner must be PID 1 to kill processes a job leaves behind (no shareProcessNamespace).
-      shareProcessNamespace: false
-      terminationGracePeriodSeconds: {{ .Values.runner.terminationGracePeriodSeconds }}
-      securityContext:
-        {{- include "opsolete.podSecurityContext" 10001 | nindent 8 }}
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      containers:
-        - name: runner
-          image: "{{ .Values.runner.image.repository }}:{{ .Values.runner.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.runner.image.pullPolicy }}
-          securityContext:
-            {{- include "opsolete.containerSecurityContext" . | nindent 12 }}
-            {{- if .Values.runner.sandbox }}
-            # the job sandbox creates user namespaces (the RuntimeDefault seccomp profile forbids them) and mounts
-            # its private /tmp in them (the default AppArmor profile denies mount)
-            seccompProfile:
-              type: Unconfined
-            appArmorProfile:
-              type: Unconfined
-            {{- end }}
-          env:
-            - name: OPS_SERVER_URL
-              value: {{ printf "http://%s.%s.svc:%v" (include "opsolete.fullname" .) .Release.Namespace .Values.service.port | quote }}
-            - name: OPS_RUNNER_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "opsolete.secretName" . }}
-                  key: RUNNER_TOKEN
-            - name: OPS_RUNNER_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            {{- if .Values.runner.sandbox }}
-            - name: OPS_SANDBOX
-              value: namespaces
-            {{- end }}
-            {{- range $k, $v := .Values.runner.env }}
-            - name: {{ $k }}
-              value: {{ $v | quote }}
-            {{- end }}
-          resources:
-            {{- toYaml .Values.runner.resources | nindent 12 }}
-          volumeMounts:
-            - name: tmp
-              mountPath: /tmp
-            - name: plugin-cache
-              mountPath: /home/runner/.terraform.d/plugin-cache
-      volumes:
-        - name: tmp
-          emptyDir: {}
-        - name: plugin-cache
-          emptyDir: {}
-      {{- with .Values.runner.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.runner.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.runner.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+    {{- include "opsolete.runnerPod" . | nindent 4 }}
 {{- end }}

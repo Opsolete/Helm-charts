@@ -47,7 +47,7 @@ serviceAccount:
 imagePullSecrets: []
 
 app:
-  replicas: 1
+  replicas: 1 # mode deployment
   image:
     repository: ghcr.io/opsolete/opsolete-app
     tag: ""                  # defaults to the chart appVersion
@@ -73,12 +73,21 @@ runner:
     pullPolicy: IfNotPresent
   # Extra OPS_* env, e.g. OPS_JOB_TIMEOUT: 45m. OPS_SERVER_URL defaults to the in-cluster Service.
   env: {}
-  # The job sandbox: each Terraform command in its own Linux namespaces, with a private /tmp
-  # (https://opsolete.github.io/Opsolete/docs/config/runners/#the-job-sandbox). Sets the runner container's
-  # seccomp and AppArmor profiles to Unconfined (Kubernetes >= 1.30) and OPS_SANDBOX=namespaces: the runner then
-  # doesn't start where the nodes forbid unprivileged user namespaces (e.g. Ubuntu >= 23.10's default
-  # kernel.apparmor_restrict_unprivileged_userns=1). Off: the runner probes it anyway and warns if it can't.
-  sandbox: false
+  # deployment: long-lived runners (replicas), one job at a time each. scaledJob: a pod per run phase, started
+  # by KEDA (installed separately) from the app's queue: every job starts in a fresh container, nothing it
+  # leaves outlives it (https://opsolete.github.io/Opsolete/docs/config/runners/#a-pod-per-run-phase).
+  mode: deployment
+  scaledJob:
+    maxReplicas: 5 # jobs at once
+    pollingInterval: 10 # seconds between KEDA's looks at the queue
+    # a pod's limit: OPS_JOB_TIMEOUT + OPS_JOB_GRACE + reporting (defaults 1h + 10m + 5m), plus its start
+    activeDeadlineSeconds: 4800
+  # e.g. gvisor or kata (a RuntimeClass on the cluster): module code doesn't run on the node's kernel
+  runtimeClassName: ""
+  pluginCache:
+    # A ReadWriteMany PVC for TF_PLUGIN_CACHE_DIR, shared by the runners; empty: an emptyDir per pod (with
+    # scaledJob, providers are downloaded for every phase)
+    existingClaim: ""
   # IPv4 CIDRs the runners may not reach (a NetworkPolicy; needs a CNI that enforces it): the cloud metadata
   # endpoint, so module code can't take the node's identity. [] adds no policy.
   blockedEgress:
