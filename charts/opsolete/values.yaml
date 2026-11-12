@@ -23,6 +23,8 @@ config:
 
 # Secret env vars. Prefer existingSecret (sops / External Secrets) with the keys
 # DATABASE_URL, SECRET_KEY, RUNNER_TOKEN and optionally OIDC_CLIENT_SECRET.
+# RUNNER_TOKEN is the token of this chart's runners: the app registers it at start (an init container,
+# `opsolete runner-token -from-env`) as runner runner.name in runner.pool. Runners elsewhere get their own.
 # SECRET_KEY must stay stable and be backed up elsewhere: without it, encrypted state is lost.
 secrets:
   existingSecret: ""
@@ -59,6 +61,11 @@ app:
 
 runner:
   enabled: true
+  # The name and pool the app registers RUNNER_TOKEN as: the runners of this Deployment are one runner to
+  # the app. They get the jobs of projects that use this pool (a project's settings); run a release per pool
+  # to keep production credentials on production runners.
+  name: k8s
+  pool: default
   replicas: 1
   image:
     repository: ghcr.io/opsolete/opsolete-runner

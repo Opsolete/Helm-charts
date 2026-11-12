@@ -10,6 +10,10 @@
 {{- if not (or (and $c.OIDC_ISSUER $c.OIDC_CLIENT_ID) $c.AUTH_DEV_USER) }}
 {{- fail "login required: set config.OIDC_ISSUER + config.OIDC_CLIENT_ID (and OIDC_CLIENT_SECRET), or config.AUTH_DEV_USER for testing" }}
 {{- end }}
+{{- $r := .Values.runner }}
+{{- if and $r.enabled (not (and (regexMatch "^[a-z0-9][a-z0-9-]{1,62}$" $r.name) (regexMatch "^[a-z0-9][a-z0-9-]{1,62}$" $r.pool))) }}
+{{- fail "runner.name and runner.pool: 2-63 lowercase letters, digits and dashes, starting with a letter or digit" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -47,6 +51,32 @@ spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $r.enabled }}
+      # Registers the runners' token (RUNNER_TOKEN) before the app starts: app >= 0.8.0 knows runners by their
+      # own registered tokens. Again on every start: it replaces the runner's token and pool.
+      initContainers:
+        - name: register-runner
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          securityContext:
+            {{- include "opsolete.containerSecurityContext" . | nindent 12 }}
+          command: ["/bin/opsolete", "runner-token", "-from-env", "RUNNER_TOKEN", "-pool", {{ $r.pool | quote }}, {{ $r.name | quote }}]
+          env:
+            {{- range $k, $v := .Values.config }}
+            {{- if $v }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ include "opsolete.secretName" . }}
+          resources:
+            {{- toYaml .Values.app.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
       {{- end }}
       containers:
         - name: app

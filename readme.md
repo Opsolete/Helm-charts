@@ -11,6 +11,10 @@ helm install opsolete oci://ghcr.io/opsolete/charts/opsolete -f my-values.yaml
 |---|---|
 | [opsolete](charts/opsolete) | Opsolete app + runners ([docs](https://github.com/Opsolete/Opsolete)) |
 
+## Upgrading
+
+- **opsolete chart 0.3.0 (app 0.8.0):** runners have their own registered tokens. The chart keeps the `RUNNER_TOKEN` secret key and registers it as runner `runner.name` (default `k8s`) in `runner.pool` (default `default`) with an init container before the app starts, so nothing changes for a single runner Deployment. For several pools, run a release per pool with its own `RUNNER_TOKEN`, `runner.name` and `runner.pool`, and pick the pool in each project's settings.
+
 ## Development
 
 - CI (`.github/workflows/charts.yml`) runs `ct lint`, kubeconform and `ct install` on kind (with a throwaway Postgres) for every PR, using each chart's `ci/*-values.yaml`.
