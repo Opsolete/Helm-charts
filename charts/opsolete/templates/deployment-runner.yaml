@@ -44,6 +44,11 @@ spec:
           imagePullPolicy: {{ .Values.runner.image.pullPolicy }}
           securityContext:
             {{- include "opsolete.containerSecurityContext" . | nindent 12 }}
+            {{- if .Values.runner.sandbox }}
+            # the job sandbox creates user namespaces, which the RuntimeDefault profile forbids
+            seccompProfile:
+              type: Unconfined
+            {{- end }}
           env:
             - name: OPS_SERVER_URL
               value: {{ printf "http://%s.%s.svc:%v" (include "opsolete.fullname" .) .Release.Namespace .Values.service.port | quote }}
@@ -56,6 +61,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            {{- if .Values.runner.sandbox }}
+            - name: OPS_SANDBOX
+              value: namespaces
+            {{- end }}
             {{- range $k, $v := .Values.runner.env }}
             - name: {{ $k }}
               value: {{ $v | quote }}
