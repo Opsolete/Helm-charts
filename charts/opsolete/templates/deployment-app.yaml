@@ -48,6 +48,25 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.runner.enabled }}
+      initContainers:
+        # Registers the runners' token (the server knows a runner by its registered token), at every
+        # start so a changed secret takes effect; on a new database it creates the schema first.
+        - name: register-runner
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          command: ["/bin/opsolete", "runner-token", "-from-env", "RUNNER_TOKEN", "-pool", {{ .Values.runner.pool | quote }}, {{ .Values.runner.name | quote }}]
+          securityContext:
+            {{- include "opsolete.containerSecurityContext" . | nindent 12 }}
+          env:
+            {{- include "opsolete.configEnv" . | nindent 12 }}
+          envFrom:
+            - secretRef:
+                name: {{ include "opsolete.secretName" . }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      {{- end }}
       containers:
         - name: app
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Chart.AppVersion }}"
@@ -57,12 +76,10 @@ spec:
           env:
             - name: ADDR
               value: ":8080"
-            {{- range $k, $v := .Values.config }}
-            {{- if $v }}
-            - name: {{ $k }}
-              value: {{ $v | quote }}
-            {{- end }}
-            {{- end }}
+            {{- include "opsolete.configEnv" . | nindent 12 }}
+            # the runners' token isn't the app's (it warns when set): the init container registers it
+            - name: RUNNER_TOKEN
+              value: ""
           envFrom:
             - secretRef:
                 name: {{ include "opsolete.secretName" . }}
