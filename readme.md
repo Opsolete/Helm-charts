@@ -14,6 +14,7 @@ helm install opsolete oci://ghcr.io/opsolete/charts/opsolete -f my-values.yaml
 ## Upgrading
 
 - **opsolete chart 0.3.0 (app 0.8.0):** runners have their own registered tokens. The chart keeps the `RUNNER_TOKEN` secret key and registers it as runner `runner.name` (default `k8s`) in `runner.pool` (default `default`) with an init container before the app starts, so nothing changes for a single runner Deployment. For several pools, run a release per pool with its own `RUNNER_TOKEN`, `runner.name` and `runner.pool`, and pick the pool in each project's settings.
+- **opsolete chart 0.4.0:** a NetworkPolicy keeps the runners from the cloud metadata endpoint (`runner.blockedEgress`; `[]` for none): a runner that needs the node's identity from it stops getting it. New `runner.mode: scaledJob` runs a pod per run phase, started by [KEDA](https://keda.sh) (install it first) from the app's queue; `runner.pluginCache.existingClaim` (a ReadWriteMany PVC) keeps providers between pods, `runner.runtimeClassName` (gVisor, Kata) keeps module code off the node's kernel.
 
 ## Development
 

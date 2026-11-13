@@ -1,0 +1,50 @@
+{{- if .Values.runner.enabled }}
+{{- if not (has .Values.runner.mode (list "deployment" "scaledJob")) }}
+{{- fail "runner.mode must be deployment or scaledJob" }}
+{{- end }}
+{{- if eq .Values.runner.mode "scaledJob" }}
+# A pod per run phase (needs KEDA): KEDA polls the app's runner queue for this pool, with the runners' token, and
+# starts a Job per queued phase; each runs one job (OPS_RUNNER_ONCE) and ends.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: {{ include "opsolete.fullname" . }}-runner
+  labels:
+    {{- include "opsolete.labels" . | nindent 4 }}
+    app.kubernetes.io/component: runner
+spec:
+  jobTargetRef:
+    backoffLimit: 0
+    activeDeadlineSeconds: {{ .Values.runner.scaledJob.activeDeadlineSeconds }}
+    template:
+      {{- include "opsolete.runnerPod" . | nindent 6 }}
+  pollingInterval: {{ .Values.runner.scaledJob.pollingInterval }}
+  maxReplicaCount: {{ .Values.runner.scaledJob.maxReplicas }}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  scalingStrategy:
+    strategy: accurate # the queue doesn't count claimed phases: running jobs aren't subtracted from it
+  triggers:
+    - type: metrics-api
+      metadata:
+        url: {{ printf "http://%s.%s.svc:%v/api/runner/v1/queue" (include "opsolete.fullname" .) .Release.Namespace .Values.service.port | quote }}
+        valueLocation: queued
+        targetValue: "1"
+        authMode: bearer
+      authenticationRef:
+        name: {{ include "opsolete.fullname" . }}-runner
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "opsolete.fullname" . }}-runner
+  labels:
+    {{- include "opsolete.labels" . | nindent 4 }}
+    app.kubernetes.io/component: runner
+spec:
+  secretTargetRef:
+    - parameter: token
+      name: {{ include "opsolete.secretName" . }}
+      key: RUNNER_TOKEN
+{{- end }}
+{{- end }}
