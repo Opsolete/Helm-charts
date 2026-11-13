@@ -1,0 +1,28 @@
+{{- if and .Values.runner.enabled .Values.runner.networkPolicy.enabled }}
+# Runner egress: anywhere but the blocked ranges (the cloud's instance metadata endpoint), so module
+# code a job runs can't take the node's cloud identity. Ingress is unrestricted: runners listen on nothing.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opsolete.fullname" . }}-runner
+  labels:
+    {{- include "opsolete.labels" . | nindent 4 }}
+    app.kubernetes.io/component: runner
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "opsolete.selectorLabels" (list . "runner") | nindent 6 }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        # in-cluster pods (the app's Service, DNS): some CNIs (Cilium) don't count them in an ipBlock
+        - namespaceSelector: {}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            {{- with .Values.runner.networkPolicy.blockedCIDRs }}
+            except:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+        - ipBlock:
+            cidr: ::/0
+{{- end }}

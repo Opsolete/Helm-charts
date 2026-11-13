@@ -27,6 +27,16 @@ app.kubernetes.io/instance: {{ (index . 0).Release.Name }}
 app.kubernetes.io/component: {{ index . 1 }}
 {{- end -}}
 
+{{/* the app's plain settings (config), as env entries */}}
+{{- define "opsolete.configEnv" -}}
+{{- range $k, $v := .Values.config }}
+{{- if $v }}
+- name: {{ $k }}
+  value: {{ $v | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
 {{- define "opsolete.secretName" -}}
 {{- default (include "opsolete.fullname" .) .Values.secrets.existingSecret -}}
 {{- end -}}

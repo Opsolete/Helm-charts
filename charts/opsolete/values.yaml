@@ -1,7 +1,7 @@
 nameOverride: ""
 fullnameOverride: ""
 
-# Plain (non-secret) env vars for the app; see docs/content/docs/operations/configuration.md.
+# Plain (non-secret) env vars for the app; see https://opsolete.github.io/Opsolete/docs/config/reference/.
 # The chart refuses to render without STATE_STORE and a login method (app >= 0.3.0
 # exits on startup without them).
 config:
@@ -22,13 +22,15 @@ config:
   # AZURE_STORAGE_ACCOUNT: mystorageaccount   # needed with azblob://
 
 # Secret env vars. Prefer existingSecret (sops / External Secrets) with the keys
-# DATABASE_URL, SECRET_KEY, RUNNER_TOKEN and optionally OIDC_CLIENT_SECRET.
+# DATABASE_URL, SECRET_KEY, RUNNER_TOKEN and optionally OIDC_CLIENT_SECRET. The app gets
+# every key but RUNNER_TOKEN: that's the runners' token, which the app's init container
+# registers at every start (as runner.name in runner.pool).
 # SECRET_KEY must stay stable and be backed up elsewhere: without it, encrypted state is lost.
 secrets:
   existingSecret: ""
   DATABASE_URL: ""
   SECRET_KEY: ""             # openssl rand -base64 32
-  RUNNER_TOKEN: ""           # openssl rand -hex 32
+  RUNNER_TOKEN: ""           # openssl rand -hex 32 (at least 32 characters)
   OIDC_CLIENT_SECRET: ""
 
 # Workload identity for the app, so it reaches STATE_STORE without static keys.
@@ -59,6 +61,10 @@ app:
 
 runner:
   enabled: true
+  # The runners' identity on the app (Settings -> Runners): all replicas share it and its
+  # token. Projects pick a pool; runs only go to runners in their project's pool.
+  name: k8s
+  pool: default
   replicas: 1
   image:
     repository: ghcr.io/opsolete/opsolete-runner
@@ -66,8 +72,14 @@ runner:
     pullPolicy: IfNotPresent
   # Extra OPS_* env, e.g. OPS_JOB_TIMEOUT: 45m. OPS_SERVER_URL defaults to the in-cluster Service.
   env: {}
-  # First SIGTERM drains the current job; keep this >= OPS_JOB_TIMEOUT (default 1h).
-  terminationGracePeriodSeconds: 3600
+  # First SIGTERM drains the current job: keep this >= OPS_JOB_TIMEOUT + OPS_JOB_GRACE + 5m
+  # (defaults 1h + 10m + 5m), or a long apply is killed before it saves its state.
+  terminationGracePeriodSeconds: 4500
+  # Egress for the runner pods: everything but the cloud's instance metadata endpoint, so
+  # module code can't take the node's identity. Needs a CNI that enforces NetworkPolicy.
+  networkPolicy:
+    enabled: true
+    blockedCIDRs: ["169.254.169.254/32"]   # IPv4 ranges
   resources: {}
   podAnnotations: {}
   podLabels: {}

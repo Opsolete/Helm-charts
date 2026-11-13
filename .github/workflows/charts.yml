@@ -81,6 +81,29 @@ jobs:
       # Installs with every ci/*-values.yaml and waits until app and runner pods are ready.
       - run: ct install ${{ steps.scope.outputs.args }}
 
+      # ct install only waits for ready pods, and a runner whose token the app doesn't know is ready until
+      # its first claim fails. Install once more on a database of its own (ct's left runner k8s seen in the
+      # shared one) and check the runner reached the app: no restarts, and Settings -> Runners has seen it.
+      - name: opsolete runner connects
+        run: |
+          kubectl exec deploy/postgres -- createdb -U opsolete e2e
+          helm install e2e charts/opsolete -f charts/opsolete/ci/e2e-values.yaml --wait --timeout 5m \
+            --set secrets.DATABASE_URL='postgres://opsolete:opsolete@postgres.default.svc:5432/e2e?sslmode=disable'
+          sleep 30
+          kubectl port-forward svc/e2e-opsolete 8080:80 >/dev/null & pf=$!
+          sleep 3
+          page=$(curl -sf http://localhost:8080/organization/runners | sed 's/<[^>]*>/ /g' | tr -s ' \n' ' ') || true
+          kill $pf
+          restarts=$(kubectl get pods -l app.kubernetes.io/instance=e2e,app.kubernetes.io/component=runner \
+            -o jsonpath='{.items[*].status.containerStatuses[*].restartCount}')
+          if [ "$restarts" != 0 ] || ! echo "$page" | grep -q "k8s default" || echo "$page" | grep -q "k8s default never"; then
+            echo "::error::the runner didn't connect (restarts: $restarts)"
+            echo "$page" | grep -o "Name Pool.\{0,200\}"
+            kubectl logs -l app.kubernetes.io/instance=e2e --all-containers --prefix --tail=30
+            exit 1
+          fi
+          echo "runner k8s connected: $(echo "$page" | grep -o 'k8s default [^D]*')"
+
   # Package changed chart versions as GitHub releases and update the index on gh-pages.
   release:
     needs: test
